@@ -54,9 +54,7 @@ fn game(input: &str) -> IResult<&str, Vec<HashMap<Color, u32>>> {
 }
 
 fn parse_input(input: &str) -> Vec<Vec<HashMap<Color, u32>>> {
-    let (rem, res) = separated_list1(tag("\n"), game)(input).unwrap();
-    println!("{}", rem);
-    return res;
+    separated_list1(tag("\n"), game)(input).unwrap().1
 }
 
 fn is_possible(game: &[HashMap<Color, u32>], content: &HashMap<Color, u32>) -> bool {
@@ -80,11 +78,33 @@ fn solve_part1(games: &[Vec<HashMap<Color, u32>>], content: &HashMap<Color, u32>
         .sum()
 }
 
+fn min_content(draws: &[HashMap<Color, u32>]) -> HashMap<Color, u32> {
+    draws.iter().fold(HashMap::new(), |mut acc, x| {
+        x.iter().for_each(|(color, &count)| {
+            let val = acc.entry(*color).or_default();
+            *val = count.max(*val);
+        });
+        acc
+    })
+}
+
+fn power(content: &HashMap<Color, u32>) -> u32 {
+    [Color::Blue, Color::Green, Color::Red]
+        .iter()
+        .map(|c| content.get(c).copied().unwrap_or_default())
+        .product()
+}
+
+fn solve_part2(games: &[Vec<HashMap<Color, u32>>]) -> u32 {
+    games.iter().map(|g| power(&min_content(g))).sum()
+}
+
 fn main() {
     let input = include_str!("../../data/day02.txt");
     let games = parse_input(input);
-    assert_eq!(games.len(), 100);
     let content = HashMap::<_, _>::from([(Color::Blue, 14), (Color::Green, 13), (Color::Red, 12)]);
     let answer1 = solve_part1(&games, &content);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&games);
+    println!("The answer to part 2 is {}", answer2);
 }
