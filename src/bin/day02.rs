@@ -59,9 +59,32 @@ fn parse_input(input: &str) -> Vec<Vec<HashMap<Color, u32>>> {
     return res;
 }
 
+fn is_possible(game: &[HashMap<Color, u32>], content: &HashMap<Color, u32>) -> bool {
+    game.iter().all(|g| {
+        g.iter()
+            .all(|(color, &count)| count <= content.get(color).copied().unwrap_or_default())
+    })
+}
+
+fn solve_part1(games: &[Vec<HashMap<Color, u32>>], content: &HashMap<Color, u32>) -> usize {
+    games
+        .iter()
+        .enumerate()
+        .filter_map(|(i, g)| {
+            if is_possible(g, content) {
+                Some(i + 1)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
 fn main() {
     let input = include_str!("../../data/day02.txt");
     let games = parse_input(input);
     assert_eq!(games.len(), 100);
     let content = HashMap::<_, _>::from([(Color::Blue, 14), (Color::Green, 13), (Color::Red, 12)]);
+    let answer1 = solve_part1(&games, &content);
+    println!("The answer to part 1 is {}", answer1);
 }
