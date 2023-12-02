@@ -28,7 +28,7 @@ fn color(input: &str) -> IResult<&str, Color> {
 fn integer(input: &str) -> IResult<&str, u32> {
     map_res(
         recognize(many1(terminated(one_of("0123456789"), many0(char('_'))))),
-        |s: &str| s.parse::<_>(),
+        |s: &str| s.parse(),
     )(input)
 }
 
@@ -102,7 +102,7 @@ fn solve_part2(games: &[Vec<HashMap<Color, u32>>]) -> u32 {
 fn main() {
     let input = include_str!("../../data/day02.txt");
     let games = parse_input(input);
-    let content = HashMap::<_, _>::from([(Color::Blue, 14), (Color::Green, 13), (Color::Red, 12)]);
+    let content = HashMap::from([(Color::Blue, 14), (Color::Green, 13), (Color::Red, 12)]);
     let answer1 = solve_part1(&games, &content);
     println!("The answer to part 1 is {}", answer1);
     let answer2 = solve_part2(&games);
