@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Location([isize; 2]);
@@ -85,10 +85,36 @@ impl Schematic {
             .filter(|(id, loc)| number_locations(*id, *loc).any(|l| self.neighbors_symbol(&l)))
             .map(|(id, _)| id)
     }
+
+    fn gear_ratios(&self) -> impl Iterator<Item = u32> {
+        let mut gears = HashMap::<Location, HashSet<PartId>>::new();
+        for (part_id, head) in &self.numbers {
+            for location in number_locations(*part_id, *head) {
+                for loc in location.neighbors() {
+                    if let Some(symbol) = self.symbols.get(&loc) {
+                        if *symbol == '*' {
+                            gears.entry(loc).or_default().insert(*part_id);
+                        }
+                    }
+                }
+            }
+        }
+        gears.into_iter().filter_map(|(_, parts)| {
+            if parts.len() != 2 {
+                None
+            } else {
+                Some(parts.iter().take(2).product())
+            }
+        })
+    }
 }
 
 fn solve_part1(schematic: &Schematic) -> u32 {
     schematic.parts().sum()
+}
+
+fn solve_part2(schematic: &Schematic) -> u32 {
+    schematic.gear_ratios().sum()
 }
 
 fn main() {
@@ -96,6 +122,6 @@ fn main() {
     let schematic = parse_input(input);
     let answer1 = solve_part1(&schematic);
     println!("The answer to part 1 is {}", answer1);
-    //let answer2 = solve_part2();
-    //println!("The answer to part 2 is {}", answer2);
+    let answer2 = solve_part2(&schematic);
+    println!("The answer to part 2 is {}", answer2);
 }
