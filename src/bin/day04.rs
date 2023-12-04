@@ -41,14 +41,24 @@ impl Card {
 
 fn solve_part1(data: &[Card]) -> usize {
     data.iter()
-        .map(|c| {
-            let wins = c.win_count();
-            match wins {
-                0 => 0,
-                _ => 1 << (wins - 1),
-            }
+        .map(|c| match c.win_count() {
+            0 => 0,
+            wins => 1 << (wins - 1),
         })
         .sum()
+}
+
+fn solve_part2(data: &[Card]) -> usize {
+    data.iter()
+        .fold((0, vec![1; data.len()]), |(sum, mut copies), c| {
+            let count = copies.pop().unwrap_or_default();
+            let wins = c.win_count();
+            copies.iter_mut().rev().take(wins).for_each(|c| {
+                *c += count;
+            });
+            (sum + count, copies)
+        })
+        .0
 }
 
 fn main() {
@@ -56,4 +66,6 @@ fn main() {
     let data = parse_input(input);
     let answer1 = solve_part1(&data);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&data);
+    println!("The answer to part 2 is {}", answer2);
 }
