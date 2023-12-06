@@ -101,9 +101,28 @@ fn solve_part1(seeds: &[Id], mappings: &[Mapping]) -> Id {
         .unwrap()
 }
 
+struct Interval {
+    begin: Id,
+    range: Id,
+}
+
+impl Interval {
+    fn new(data: &[Id]) -> Self {
+        Interval {
+            begin: data[0],
+            range: data[1],
+        }
+    }
+}
+
+fn into_intervals(seed_data: &[Id]) -> Vec<Interval> {
+    seed_data.chunks_exact(2).map(Interval::new).collect()
+}
+
 fn main() {
     let input = include_str!("../../data/day05.txt");
     let (seeds, mappings) = parse_input(input);
     let answer1 = solve_part1(&seeds, &mappings);
     println!("The answer to part 1 is {}", answer1);
+    let seed_intervals = into_intervals(&seeds);
 }
