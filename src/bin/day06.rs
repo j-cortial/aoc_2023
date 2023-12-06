@@ -41,8 +41,41 @@ fn parse_input(input: &str) -> Vec<Race> {
         .collect()
 }
 
+struct Outcome {
+    race_time: i32,
+    hold_time: i32,
+}
+
+impl Outcome {
+    fn distance(&self) -> i32 {
+        if self.hold_time <= 0 || self.hold_time >= self.race_time {
+            return 0;
+        }
+        (self.race_time - self.hold_time) * self.hold_time
+    }
+}
+
+fn solve_part1(races: &[Race]) -> usize {
+    races
+        .iter()
+        .map(|r| {
+            (1..r.time)
+                .map(|h| {
+                    Outcome {
+                        race_time: r.time,
+                        hold_time: h,
+                    }
+                    .distance()
+                })
+                .filter(|&d| d > r.distance)
+                .count()
+        })
+        .product()
+}
+
 fn main() {
     let input = include_str!("../../data/day06.txt");
     let races = parse_input(input);
-    dbg!(races);
+    let answer1 = solve_part1(&races);
+    println!("The answer to part 1 is {}", answer1);
 }
