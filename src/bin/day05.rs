@@ -101,13 +101,14 @@ fn solve_part1(seeds: &[Id], mappings: &[Mapping]) -> Id {
         .unwrap()
 }
 
+#[derive(Debug, Clone, Copy)]
 struct Interval {
     begin: Id,
     range: Id,
 }
 
 impl Interval {
-    fn new(data: &[Id]) -> Self {
+    fn from_slice(data: &[Id]) -> Self {
         Interval {
             begin: data[0],
             range: data[1],
@@ -115,8 +116,107 @@ impl Interval {
     }
 }
 
+impl Interval {
+    fn try_merge(&self, other: &Interval) -> Option<Interval> {
+        if other.begin >= self.begin && other.begin <= self.begin + self.range {
+            return Some(Interval {
+                begin: self.begin,
+                range: self.range.max((other.begin - self.begin) + other.range),
+            });
+        }
+        None
+    }
+}
+
 fn into_intervals(seed_data: &[Id]) -> Vec<Interval> {
-    seed_data.chunks_exact(2).map(Interval::new).collect()
+    seed_data
+        .chunks_exact(2)
+        .map(Interval::from_slice)
+        .collect()
+}
+
+#[derive(Debug)]
+struct Collection {
+    intervals: Vec<Interval>,
+}
+
+impl Collection {
+    fn new(mut intervals: Vec<Interval>) -> Self {
+        intervals.sort_unstable_by_key(|i| i.begin);
+        let steps = intervals.len() - 1;
+        for i in (0..steps).rev() {
+            if let Some(merged) = intervals[i].try_merge(&intervals[i + 1]) {
+                intervals.swap_remove(i + 1);
+                intervals[i] = merged;
+            }
+        }
+        Collection { intervals }
+    }
+}
+
+impl Mapping {
+    fn apply_n(&self, source: Interval) -> Vec<Interval> {
+        match self.entries.binary_search_by(|e| e.compare(source.begin)) {
+            Ok(i) => self.push_transform(i, source, vec![]),
+            Err(i) => self.push_direct(i, source, vec![]),
+        }
+    }
+
+    fn push_direct(&self, i: usize, source: Interval, mut acc: Vec<Interval>) -> Vec<Interval> {
+        if self.entries.len() <= i {
+            acc.push(source);
+            return acc;
+        }
+        let range = source.range.min(self.entries[i].source - source.begin);
+        if range > 0 {
+            acc.push(Interval {
+                begin: source.begin,
+                range,
+            });
+        }
+        if range < source.range {
+            return self.push_transform(
+                i,
+                Interval {
+                    begin: self.entries[i].source,
+                    range: source.range - range,
+                },
+                acc,
+            );
+        }
+        acc
+    }
+
+    fn push_transform(&self, i: usize, source: Interval, mut acc: Vec<Interval>) -> Vec<Interval> {
+        let delta = source.begin - self.entries[i].source;
+        let range = source.range.min(self.entries[i].range - delta);
+        acc.push(Interval {
+            begin: self.entries[i].target + delta,
+            range,
+        });
+        if range < source.range {
+            return self.push_direct(
+                i + 1,
+                Interval {
+                    begin: source.begin + range,
+                    range: source.range - range,
+                },
+                acc,
+            );
+        }
+        acc
+    }
+}
+
+fn solve_part2(mut seeds: Vec<Interval>, mappings: &[Mapping]) -> Id {
+    for m in mappings {
+        seeds = seeds
+            .into_iter()
+            .flat_map(|s| m.apply_n(s).into_iter())
+            .collect();
+        seeds = Collection::new(seeds).intervals;
+    }
+    seeds[0].begin
 }
 
 fn main() {
@@ -124,5 +224,6 @@ fn main() {
     let (seeds, mappings) = parse_input(input);
     let answer1 = solve_part1(&seeds, &mappings);
     println!("The answer to part 1 is {}", answer1);
-    let seed_intervals = into_intervals(&seeds);
+    let answer2 = solve_part2(into_intervals(&seeds), &mappings);
+    println!("The answer to part 2 is {}", answer2);
 }
