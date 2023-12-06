@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use nom::{
     bytes::complete::tag,
     character::complete::{char, none_of, one_of},
@@ -9,12 +11,22 @@ use nom::{
 
 type Id = u64;
 
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Entry {
     source: Id,
     target: Id,
     range: Id,
+}
+
+struct Mapping {
+    entries: Vec<Entry>,
+}
+
+impl Mapping {
+    fn new(mut entries: Vec<Entry>) -> Self {
+        entries.sort_unstable();
+        Self { entries }
+    }
 }
 
 fn integer(input: &str) -> IResult<&str, Id> {
@@ -26,8 +38,8 @@ fn integer(input: &str) -> IResult<&str, Id> {
 
 fn entry(input: &str) -> IResult<&str, Entry> {
     map(separated_list1(tag(" "), integer), |v| Entry {
-        source: v[0],
-        target: v[1],
+        target: v[0],
+        source: v[1],
         range: v[2],
     })(input)
 }
@@ -40,14 +52,14 @@ fn initial_seeds(input: &str) -> IResult<&str, Vec<Id>> {
     )(input)
 }
 
-fn mapping(input: &str) -> IResult<&str, Vec<Entry>> {
+fn mapping(input: &str) -> IResult<&str, Mapping> {
     preceded(
         pair(many1(none_of(":")), tag(":\n")),
-        many1(terminated(entry, tag("\n"))),
+        map(many1(terminated(entry, tag("\n"))), Mapping::new),
     )(input)
 }
 
-fn parse_input(input: &str) -> (Vec<Id>, Vec<Vec<Entry>>) {
+fn parse_input(input: &str) -> (Vec<Id>, Vec<Mapping>) {
     separated_pair(
         initial_seeds,
         tag("\n"),
@@ -57,7 +69,41 @@ fn parse_input(input: &str) -> (Vec<Id>, Vec<Vec<Entry>>) {
     .1
 }
 
+impl Entry {
+    fn compare(&self, source: Id) -> Ordering {
+        if self.source + self.range <= source {
+            return Ordering::Less;
+        }
+        if self.source > source {
+            return Ordering::Greater;
+        }
+        Ordering::Equal
+    }
+}
+
+impl Mapping {
+    fn apply(&self, source: Id) -> Id {
+        match self.entries.binary_search_by(|e| e.compare(source)) {
+            Ok(index) => {
+                let entry = &self.entries[index];
+                entry.target + (source - entry.source)
+            }
+            Err(_) => source,
+        }
+    }
+}
+
+fn solve_part1(seeds: &[Id], mappings: &[Mapping]) -> Id {
+    seeds
+        .iter()
+        .map(|&s| mappings.iter().fold(s, |acc, m| m.apply(acc)))
+        .min()
+        .unwrap()
+}
+
 fn main() {
     let input = include_str!("../../data/day05.txt");
     let (seeds, mappings) = parse_input(input);
+    let answer1 = solve_part1(&seeds, &mappings);
+    println!("The answer to part 1 is {}", answer1);
 }
