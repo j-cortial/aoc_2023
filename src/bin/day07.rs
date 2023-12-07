@@ -109,10 +109,10 @@ impl Hand {
     }
 }
 
-fn solve_part1(hands: &[Hand]) -> usize {
+fn solve_with_key(hands: &[Hand], key: fn(&Hand) -> Strength) -> usize {
     let sorted_hands = {
         let mut hands = hands.to_vec();
-        hands.sort_unstable_by_key(Hand::strength);
+        hands.sort_unstable_by_key(key);
         hands
     };
     sorted_hands
@@ -122,17 +122,12 @@ fn solve_part1(hands: &[Hand]) -> usize {
         .sum()
 }
 
+fn solve_part1(hands: &[Hand]) -> usize {
+    solve_with_key(hands, Hand::strength)
+}
+
 fn solve_part2(hands: &[Hand]) -> usize {
-    let sorted_hands = {
-        let mut hands = hands.to_vec();
-        hands.sort_unstable_by_key(Hand::alt_strength);
-        hands
-    };
-    sorted_hands
-        .into_iter()
-        .enumerate()
-        .map(|(i, h)| (i + 1) * h.bet as usize)
-        .sum()
+    solve_with_key(hands, Hand::alt_strength)
 }
 
 fn main() {
