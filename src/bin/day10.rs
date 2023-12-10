@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 enum Tile {
@@ -63,7 +63,7 @@ struct Grid {
 }
 
 impl Grid {
-    fn new(mut tiles: Vec<Vec<Tile>>, start: Loc) -> Self {
+    fn new(tiles: Vec<Vec<Tile>>, start: Loc) -> Self {
         let mut res = Self { tiles };
         *res.tile_mut(start) = Tile::EastWest; // HACK
         res
@@ -107,7 +107,7 @@ fn parse_input(input: &str) -> (Grid, Loc) {
     (Grid::new(tiles, start), start)
 }
 
-fn solve_part1(grid: &Grid, start: Loc) -> usize {
+fn find_circuit (grid: &Grid, start: Loc) -> HashMap<Loc, usize> {
     let mut distances = HashMap::from([(start, 0)]);
     let mut front: Vec<_> = grid
         .tile(start)
@@ -134,12 +134,18 @@ fn solve_part1(grid: &Grid, start: Loc) -> usize {
         }
         front = new_front;
     }
-    distances.values().copied().max().unwrap()
+    distances
 }
+
+fn solve_part1(circuit: &HashMap<Loc, usize>) -> usize {
+    circuit.values().copied().max().unwrap()
+}
+
 
 fn main() {
     let input = include_str!("../../data/day10.txt");
     let (grid, start) = parse_input(input);
-    let answer1 = solve_part1(&grid, start);
+    let circuit = find_circuit(&grid, start);
+    let answer1 = solve_part1(&circuit);
     println!("The answer to part 1 is {}", answer1);
 }
