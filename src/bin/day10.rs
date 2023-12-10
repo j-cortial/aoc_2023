@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy)]
 enum Tile {
@@ -107,8 +107,8 @@ fn parse_input(input: &str) -> (Grid, Loc) {
     (Grid::new(tiles, start), start)
 }
 
-fn find_circuit(grid: &Grid, start: Loc) -> HashMap<Loc, usize> {
-    let mut distances = HashMap::from([(start, 0)]);
+fn find_circuit(grid: &Grid, start: Loc) -> HashSet<Loc> {
+    let mut circuit = HashSet::from([start]);
     let mut front: Vec<_> = grid
         .tile(start)
         .directions()
@@ -119,8 +119,8 @@ fn find_circuit(grid: &Grid, start: Loc) -> HashMap<Loc, usize> {
         let mut new_front = vec![];
         for (loc, dir) in front {
             let candidate = dir.next(loc);
-            if !distances.contains_key(&candidate) {
-                distances.insert(candidate, *distances.get(&loc).unwrap() + 1);
+            if !circuit.contains(&candidate) {
+                circuit.insert(candidate);
                 new_front.push((
                     candidate,
                     grid.tile(candidate)
@@ -134,11 +134,11 @@ fn find_circuit(grid: &Grid, start: Loc) -> HashMap<Loc, usize> {
         }
         front = new_front;
     }
-    distances
+    circuit
 }
 
-fn solve_part1(circuit: &HashMap<Loc, usize>) -> usize {
-    circuit.values().copied().max().unwrap()
+fn solve_part1(circuit: &HashSet<Loc>) -> usize {
+    circuit.len() / 2
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,7 +194,7 @@ impl Status {
     }
 }
 
-fn solve_part2(grid: &Grid, circuit: &HashMap<Loc, usize>) -> usize {
+fn solve_part2(grid: &Grid, circuit: &HashSet<Loc>) -> usize {
     grid.tiles
         .iter()
         .enumerate()
@@ -203,7 +203,7 @@ fn solve_part2(grid: &Grid, circuit: &HashMap<Loc, usize>) -> usize {
                 .enumerate()
                 .map(move |(j, tile)| ((i as i64, j as i64), tile))
                 .scan(Status::Out, |acc, (loc, tile)| {
-                    *acc = if circuit.contains_key(&loc) {
+                    *acc = if circuit.contains(&loc) {
                         acc.next(*tile)
                     } else if *acc == Status::InWall {
                         Status::In
