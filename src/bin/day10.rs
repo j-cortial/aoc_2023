@@ -143,8 +143,7 @@ fn find_circuit(grid: &Grid, start: Loc) -> HashSet<Loc> {
                     grid.tile(candidate)
                         .directions()
                         .into_iter()
-                        .filter(|&d| d != dir.opposite())
-                        .next()
+                        .find(|&d| d != dir.opposite())
                         .unwrap(),
                 ));
             }
