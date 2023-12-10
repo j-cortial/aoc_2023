@@ -219,15 +219,15 @@ fn solve_part2(grid: &Grid, circuit: &HashSet<Loc>) -> usize {
             row.iter()
                 .enumerate()
                 .map(move |(j, tile)| ((i as i64, j as i64), tile))
-                .scan(Status::Out, |acc, (loc, tile)| {
-                    *acc = if circuit.contains(&loc) {
-                        acc.next(*tile)
-                    } else if *acc == Status::InWall {
+                .scan(Status::Out, |status, (loc, tile)| {
+                    *status = if circuit.contains(&loc) {
+                        status.next(*tile)
+                    } else if *status == Status::InWall {
                         Status::In
                     } else {
-                        *acc
+                        *status
                     };
-                    Some(*acc)
+                    Some(*status)
                 })
                 .filter(|&status| status == Status::In)
                 .count()
