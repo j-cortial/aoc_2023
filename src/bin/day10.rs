@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy)]
 enum Tile {
@@ -126,29 +126,24 @@ fn parse_input(input: &str) -> (Grid, Loc) {
 
 fn find_circuit(grid: &Grid, start: Loc) -> HashSet<Loc> {
     let mut circuit = HashSet::from([start]);
-    let mut front: Vec<_> = grid
+    let mut front: VecDeque<_> = grid
         .tile(start)
         .directions()
         .into_iter()
         .map(|dir| (start, dir))
         .collect();
-    while !front.is_empty() {
-        let mut new_front = vec![];
-        for (loc, dir) in front {
-            let candidate = dir.next(loc);
-            if !circuit.contains(&candidate) {
-                circuit.insert(candidate);
-                new_front.push((
-                    candidate,
-                    grid.tile(candidate)
-                        .directions()
-                        .into_iter()
-                        .find(|&d| d != dir.opposite())
-                        .unwrap(),
-                ));
-            }
+    while let Some((loc, dir)) = front.pop_front() {
+        let candidate = dir.next(loc);
+        if circuit.insert(candidate) {
+            front.push_back((
+                candidate,
+                grid.tile(candidate)
+                    .directions()
+                    .into_iter()
+                    .find(|&d| d != dir.opposite())
+                    .unwrap(),
+            ));
         }
-        front = new_front;
     }
     circuit
 }
