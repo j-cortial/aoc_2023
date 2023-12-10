@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, iter::successors};
 
 #[derive(Debug, Clone, Copy)]
 enum Tile {
@@ -125,21 +125,22 @@ fn parse_input(input: &str) -> (Grid, Loc) {
 }
 
 fn find_circuit(grid: &Grid, start: Loc) -> HashSet<Loc> {
-    let mut circuit = HashSet::new();
-    let mut candidate = (start, grid.tile(start).directions()[0]);
-
-    while circuit.insert(candidate.0) {
-        let next_loc = candidate.1.next(candidate.0);
-        candidate = (
-            next_loc,
-            grid.tile(next_loc)
-                .directions()
-                .into_iter()
-                .find(|&d| d != candidate.1.opposite())
-                .unwrap(),
-        );
-    }
-    circuit
+    successors(
+        Some((start, grid.tile(start).directions()[0])),
+        |candidate| {
+            let next_loc = candidate.1.next(candidate.0);
+            (next_loc != start).then_some((
+                next_loc,
+                grid.tile(next_loc)
+                    .directions()
+                    .into_iter()
+                    .find(|&d| d != candidate.1.opposite())
+                    .unwrap(),
+            ))
+        },
+    )
+    .map(|(loc, _)| loc)
+    .collect()
 }
 
 fn solve_part1(circuit: &HashSet<Loc>) -> usize {
