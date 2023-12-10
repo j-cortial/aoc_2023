@@ -65,7 +65,25 @@ struct Grid {
 impl Grid {
     fn new(tiles: Vec<Vec<Tile>>, start: Loc) -> Self {
         let mut res = Self { tiles };
-        *res.tile_mut(start) = Tile::EastWest; // HACK
+        use Direction::*;
+        let directions: Vec<_> = [East, North, South, West]
+            .into_iter()
+            .filter_map(|d| {
+                if res.tile(d.next(start)).directions().contains(&d.opposite()) {
+                    Some(d)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        use Tile::*;
+        let tile = [
+            NorthSouth, EastWest, NorthEast, NorthWest, SouthWest, SouthEast,
+        ]
+        .into_iter()
+        .find(|t| t.directions() == directions)
+        .unwrap();
+        *res.tile_mut(start) = tile;
         res
     }
 
