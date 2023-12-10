@@ -69,11 +69,10 @@ impl Grid {
         let directions: Vec<_> = [East, North, South, West]
             .into_iter()
             .filter_map(|d| {
-                if res.tile(d.next(start)).directions().contains(&d.opposite()) {
-                    Some(d)
-                } else {
-                    None
-                }
+                res.tile(d.next(start))
+                    .directions()
+                    .contains(&d.opposite())
+                    .then_some(d)
             })
             .collect();
         use Tile::*;
