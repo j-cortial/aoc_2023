@@ -24,9 +24,9 @@ enum Direction {
 impl Direction {
     fn opposite(&self) -> Self {
         match *self {
-            Direction::East => Direction::West,
             Direction::North => Direction::South,
             Direction::South => Direction::North,
+            Direction::East => Direction::West,
             Direction::West => Direction::East,
         }
     }
@@ -66,7 +66,7 @@ impl Grid {
     fn new(tiles: Vec<Vec<Tile>>, start: Loc) -> Self {
         let mut res = Self { tiles };
         use Direction::*;
-        let directions: Vec<_> = [East, North, South, West]
+        let directions: Vec<_> = [North, South, East, West]
             .into_iter()
             .filter_map(|d| {
                 res.tile(d.next(start))
