@@ -127,14 +127,14 @@ fn parse_input(input: &str) -> (Grid, Loc) {
 fn find_circuit(grid: &Grid, start: Loc) -> HashSet<Loc> {
     successors(
         Some((start, grid.tile(start).directions()[0])),
-        |candidate| {
-            let next_loc = candidate.1.next(candidate.0);
+        |&(loc, dir)| {
+            let next_loc = dir.next(loc);
             (next_loc != start).then_some((
                 next_loc,
                 grid.tile(next_loc)
                     .directions()
                     .into_iter()
-                    .find(|&d| d != candidate.1.opposite())
+                    .find(|&d| d != dir.opposite())
                     .unwrap(),
             ))
         },
