@@ -76,17 +76,17 @@ impl Universe {
 }
 
 fn parse_input(input: &str) -> Universe {
-    let galaxies: Vec<_> = input
+    let space: Vec<_> = input
         .lines()
         .map(move |line| line.chars().map(|c| c == '#').collect())
         .collect();
-    Universe::new(galaxies)
+    Universe::new(space)
 }
 
 fn solve(universe: &Universe, age_factor: i64) -> i64 {
     universe
         .galaxy_pairs()
-        .map(|p| universe.distance(p.0, p.1, age_factor ))
+        .map(|p| universe.distance(p.0, p.1, age_factor))
         .sum()
 }
 
