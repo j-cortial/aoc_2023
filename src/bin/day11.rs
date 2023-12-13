@@ -12,7 +12,7 @@ impl Loc {
 }
 
 fn inner_range(a: i64, b: i64) -> Range<i64> {
-    a.min(b)+1..a.max(b)
+    a.min(b) + 1..a.max(b)
 }
 
 #[derive(Debug)]
@@ -63,14 +63,15 @@ impl Universe {
         zip(left_iters, right_iters).flat_map(|(r, l)| zip(l, r))
     }
 
-    fn distance(&self, a: Loc, b: Loc) -> i64 {
+    fn distance(&self, a: Loc, b: Loc, age_factor: i64) -> i64 {
         a.distance(b)
-            + inner_range(a.0, b.0)
-                .filter(|i| self.expanded_rows.binary_search(i).is_ok())
-                .count() as i64
-            + inner_range(a.1, b.1)
-                .filter(|j| self.expanded_cols.binary_search(j).is_ok())
-                .count() as i64
+            + (age_factor - 1)
+                * (inner_range(a.0, b.0)
+                    .filter(|i| self.expanded_rows.binary_search(i).is_ok())
+                    .count() as i64
+                    + inner_range(a.1, b.1)
+                        .filter(|j| self.expanded_cols.binary_search(j).is_ok())
+                        .count() as i64)
     }
 }
 
@@ -82,11 +83,19 @@ fn parse_input(input: &str) -> Universe {
     Universe::new(galaxies)
 }
 
-fn solve_part1(universe: &Universe) -> i64 {
+fn solve(universe: &Universe, age_factor: i64) -> i64 {
     universe
         .galaxy_pairs()
-        .map(|p| universe.distance(p.0, p.1))
+        .map(|p| universe.distance(p.0, p.1, age_factor ))
         .sum()
+}
+
+fn solve_part1(universe: &Universe) -> i64 {
+    solve(universe, 2)
+}
+
+fn solve_part2(universe: &Universe) -> i64 {
+    solve(universe, 1_000_000)
 }
 
 fn main() {
@@ -94,4 +103,6 @@ fn main() {
     let universe = parse_input(input);
     let answer1 = solve_part1(&universe);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&universe);
+    println!("The answer to part 2 is {}", answer2);
 }
