@@ -8,9 +8,20 @@ use nom::{
     IResult,
 };
 
-enum Kind {
+enum Direction {
     Horizontal,
     Vertical,
+}
+
+struct Split {
+    direction: Direction,
+    offset: usize,
+}
+
+impl Split {
+    fn new(direction: Direction, offset: usize) -> Self {
+        Self { direction, offset }
+    }
 }
 
 struct Pattern {
@@ -53,22 +64,22 @@ impl Pattern {
         self.rocks[0].len()
     }
 
-    fn find_reflection(&self) -> Option<(Kind, usize)> {
+    fn find_reflection(&self) -> Option<Split> {
         if let Some(i) = (1..self.rows()).find(|&i| self.has_horizontal_reflection(i)) {
-            return Some((Kind::Horizontal, i));
+            return Some(Split::new(Direction::Horizontal, i));
         }
         (1..self.cols())
             .find(|&j| self.has_vertical_reflection(j))
-            .map(|j| (Kind::Vertical, j))
+            .map(|j| Split::new(Direction::Vertical, j))
     }
 
-    fn find_smudgy_reflection(&self) -> Option<(Kind, usize)> {
+    fn find_smudgy_reflection(&self) -> Option<Split> {
         if let Some(i) = (1..self.rows()).find(|&i| self.has_smudgy_horizontal_reflection(i)) {
-            return Some((Kind::Horizontal, i));
+            return Some(Split::new(Direction::Horizontal, i));
         }
         (1..self.cols())
             .find(|&j| self.has_smudgy_vertical_reflection(j))
-            .map(|j| (Kind::Vertical, j))
+            .map(|j| Split::new(Direction::Vertical, j))
     }
 }
 
@@ -91,9 +102,9 @@ fn solve_part1(patterns: &[Pattern]) -> usize {
         .iter()
         .map(|p| {
             p.find_reflection()
-                .map(|(kind, offset)| match kind {
-                    Kind::Horizontal => 100 * offset,
-                    Kind::Vertical => offset,
+                .map(|Split{direction, offset}| match direction {
+                    Direction::Horizontal => 100 * offset,
+                    Direction::Vertical => offset,
                 })
                 .unwrap()
         })
@@ -105,9 +116,9 @@ fn solve_part2(patterns: &[Pattern]) -> usize {
         .iter()
         .map(|p| {
             p.find_smudgy_reflection()
-                .map(|(kind, offset)| match kind {
-                    Kind::Horizontal => 100 * offset,
-                    Kind::Vertical => offset,
+                .map(|Split{direction, offset}| match direction {
+                    Direction::Horizontal => 100 * offset,
+                    Direction::Vertical => offset,
                 })
                 .unwrap()
         })
@@ -123,8 +134,9 @@ fn main() {
     println!("The answer to part 2 is {}", answer2);
 }
 
+#[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::pattern;
 
     #[test]
     fn test_vertical_reflection() {
