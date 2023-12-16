@@ -26,19 +26,31 @@ impl<'a> Box<'a> {
 }
 
 #[derive(Debug)]
-enum Instruction<'a> {
-    Set(&'a [u8], u8),
-    Rm(&'a [u8]),
+enum Command {
+    Set(u8),
+    Rm,
+}
+
+#[derive(Debug)]
+struct Instruction<'a> {
+    label: &'a [u8],
+    command: Command,
 }
 
 impl<'a> Instruction<'a> {
     fn decode(instruction: &'a [u8]) -> Self {
         if instruction.ends_with(b"-") {
-            return Self::Rm(instruction.split_last().unwrap().1);
+            return Self {
+                label: instruction.split_last().unwrap().1,
+                command: Command::Rm,
+            };
         }
         let (&focal_length, head) = instruction.split_last().unwrap();
         let (_, label) = head.split_last().unwrap();
-        Self::Set(label, focal_length - b'0')
+        Self {
+            label,
+            command: Command::Set(focal_length - b'0'),
+        }
     }
 }
 
@@ -53,26 +65,22 @@ fn solve_part1(data: &[&[u8]]) -> u64 {
 fn solve_part2(instructions: &[&[u8]]) -> u64 {
     let mut boxes: Vec<Box> = vec![Default::default(); 256];
     for &instruction in instructions {
-        let cmd = Instruction::decode(instruction);
-        match cmd {
-            Instruction::Set(label, focal_length) => {
-                let box_id = apply_hash(label) as usize;
-                let lenses = &mut boxes.get_mut(box_id).unwrap().lenses;
+        let Instruction { label, command } = Instruction::decode(instruction);
+        let box_id = apply_hash(label) as usize;
+        let lenses = &mut boxes.get_mut(box_id).unwrap().lenses;
+        match command {
+            Command::Set(focal_length) => {
+                let new_lens = Lens {
+                    label,
+                    focal_length,
+                };
                 if let Some(idx) = lenses.iter().position(|l| l.label == label) {
-                    lenses[idx] = Lens {
-                        label,
-                        focal_length,
-                    }
+                    lenses[idx] = new_lens;
                 } else {
-                    lenses.push(Lens {
-                        label,
-                        focal_length,
-                    });
+                    lenses.push(new_lens);
                 }
             }
-            Instruction::Rm(label) => {
-                let box_id = apply_hash(label) as usize;
-                let lenses = &mut boxes.get_mut(box_id).unwrap().lenses;
+            Command::Rm => {
                 if let Some(idx) = lenses.iter().position(|l| l.label == label) {
                     lenses.remove(idx);
                 }
