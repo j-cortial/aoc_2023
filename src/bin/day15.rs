@@ -68,20 +68,21 @@ fn solve_part2(instructions: &[&[u8]]) -> u64 {
         let Instruction { label, command } = Instruction::decode(instruction);
         let box_id = apply_hash(label) as usize;
         let lenses = &mut boxes.get_mut(box_id).unwrap().lenses;
+        let pos = lenses.iter().position(|l| l.label == label);
         match command {
             Command::Set(focal_length) => {
                 let new_lens = Lens {
                     label,
                     focal_length,
                 };
-                if let Some(idx) = lenses.iter().position(|l| l.label == label) {
+                if let Some(idx) = pos {
                     lenses[idx] = new_lens;
                 } else {
                     lenses.push(new_lens);
                 }
             }
             Command::Rm => {
-                if let Some(idx) = lenses.iter().position(|l| l.label == label) {
+                if let Some(idx) = pos {
                     lenses.remove(idx);
                 }
             }
