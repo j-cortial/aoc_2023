@@ -31,13 +31,15 @@ enum Instruction<'a> {
     Rm(&'a [u8]),
 }
 
-fn decode_instruction(instruction: &[u8]) -> Instruction {
-    if instruction.ends_with(b"-") {
-        return Instruction::Rm(instruction.split_last().unwrap().1);
+impl<'a> Instruction<'a> {
+    fn decode(instruction: &'a [u8]) -> Self {
+        if instruction.ends_with(b"-") {
+            return Self::Rm(instruction.split_last().unwrap().1);
+        }
+        let (&focal_length, head) = instruction.split_last().unwrap();
+        let (_, label) = head.split_last().unwrap();
+        Self::Set(label, focal_length - b'0')
     }
-    let (&focal_length, head) = instruction.split_last().unwrap();
-    let (_, label) = head.split_last().unwrap();
-    Instruction::Set(label, focal_length - b'0')
 }
 
 fn parse_input(input: &str) -> Vec<&[u8]> {
@@ -51,7 +53,7 @@ fn solve_part1(data: &[&[u8]]) -> u64 {
 fn solve_part2(instructions: &[&[u8]]) -> u64 {
     let mut boxes: Vec<Box> = vec![Default::default(); 256];
     for &instruction in instructions {
-        let cmd = decode_instruction(instruction);
+        let cmd = Instruction::decode(instruction);
         match cmd {
             Instruction::Set(label, focal_length) => {
                 let box_id = apply_hash(label) as usize;
