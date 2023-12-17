@@ -81,20 +81,25 @@ impl Direction {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
-struct Status {
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+struct Status<const N: u8, const M: u8> {
     loc: Loc,
     dir: Direction,
     repeats: u8,
-    heat_loss: u32,
-    heuristic: u32,
+    heat_loss: u16,
+    heuristic: u16,
 }
 
-impl Status {
-    fn neighbors<'a>(&'a self, city: &'a City, target: Loc) -> impl Iterator<Item = Status> + 'a {
+impl<const N: u8, const M: u8> Status<N, M> {
+    fn neighbors<'a>(
+        &'a self,
+        city: &'a City,
+        target: Loc,
+    ) -> impl Iterator<Item = Status<N, M>> + 'a {
         Direction::all()
             .filter(|&d| d != self.dir.opposite())
-            .filter(|&d| self.repeats < 3 || d != self.dir)
+            .filter(|&d| self.repeats >= N || d == self.dir)
+            .filter(|&d| self.repeats < M || d != self.dir)
             .filter_map(move |d| {
                 let next_loc = self.loc.shift(d);
                 city.block(next_loc).map(|loss| Status {
@@ -107,38 +112,44 @@ impl Status {
                             1
                         }
                     },
-                    heat_loss: self.heat_loss + loss as u32,
-                    heuristic: next_loc.manhattan_distance(target) as u32,
+                    heat_loss: self.heat_loss + loss as u16,
+                    heuristic: next_loc.manhattan_distance(target) as u16,
                 })
             })
     }
 }
 
-impl PartialOrd for Status {
+impl<const N: u8, const M: u8> PartialOrd for Status<N, M> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some((other.heat_loss + other.heuristic).cmp(&(self.heat_loss + self.heuristic)))
     }
 }
 
-impl Ord for Status {
+impl<const N: u8, const M: u8> Ord for Status<N, M> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-fn solve_part1(city: &City) -> u32 {
+fn solve<const N: u8, const M: u8>(city: &City) -> u16 {
     let mut visited = HashSet::new();
     let mut front = BinaryHeap::new();
     let target = Loc(city.row_count() as i16 - 1, city.col_count() as i16 - 1);
-    let init = Status {
-        loc: Loc(0, 0),
-        dir: Direction::East,
-        repeats: 0,
-        heat_loss: 0,
-        heuristic: Loc(0, 0).manhattan_distance(target) as u32,
-    };
-    visited.insert(init);
-    front.push(init);
+    [Direction::East, Direction::South]
+        .into_iter()
+        .map(|d| Status::<N, M> {
+            loc: Loc(0, 0),
+            dir: d,
+            repeats: 0,
+            heat_loss: 0,
+            heuristic: Loc(0, 0).manhattan_distance(target) as u16,
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .for_each(|init| {
+            visited.insert(init);
+            front.push(init);
+        });
     while let Some(status) = front.pop() {
         if status.loc == target {
             return status.heat_loss;
@@ -165,20 +176,28 @@ fn parse_input(input: &str) -> City {
     }
 }
 
+fn solve_part1(city: &City) -> u16 {
+    solve::<0, 3>(city)
+}
+
+fn solve_part2(city: &City) -> u16 {
+    solve::<4, 10>(city)
+}
+
 fn main() {
     let input = include_str!("../../data/day17.txt");
     let city = parse_input(input);
     let answer1 = solve_part1(&city);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&city);
+    println!("The answer to part 2 is {}", answer2);
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{parse_input, solve_part1};
+    use crate::{parse_input, solve_part1, solve_part2};
 
-    #[test]
-    fn test_solve_part1() {
-        let input = "2413432311323
+    const INPUT: &str = "2413432311323
 3215453535623
 3255245654254
 3446585845452
@@ -191,7 +210,16 @@ mod test {
 1224686865563
 2546548887735
 4322674655533";
-        let city = parse_input(input);
+
+    #[test]
+    fn test_solve_part1() {
+        let city = parse_input(INPUT);
         assert_eq!(solve_part1(&city), 102);
+    }
+
+    #[test]
+    fn test_solve_part2() {
+        let city = parse_input(INPUT);
+        assert_eq!(solve_part2(&city), 94);
     }
 }
