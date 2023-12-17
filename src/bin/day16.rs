@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use itertools::chain;
+
 #[derive(Clone, Copy)]
 enum Tile {
     Empty,
@@ -65,6 +67,15 @@ impl Direction {
             Direction::East => Loc(0, 1),
         }
     }
+
+    fn opposite(self) -> Self {
+        match self {
+            Direction::North => Direction::South,
+            Direction::West => Direction::East,
+            Direction::South => Direction::North,
+            Direction::East => Direction::West,
+        }
+    }
 }
 
 struct Layout {
@@ -72,11 +83,19 @@ struct Layout {
 }
 
 impl Layout {
+    fn row_count(&self) -> usize {
+        self.tiles.len()
+    }
+
+    fn col_count(&self) -> usize {
+        self.tiles[0].len()
+    }
+
     fn contains(&self, loc: Loc) -> bool {
         loc.0 >= 0
             && loc.1 >= 0
-            && loc.0 < self.tiles.len() as i64
-            && loc.1 < self.tiles[0].len() as i64
+            && loc.0 < self.row_count() as i64
+            && loc.1 < self.col_count() as i64
     }
 
     fn tile(&self, loc: Loc) -> Option<Tile> {
@@ -85,6 +104,22 @@ impl Layout {
         } else {
             None
         }
+    }
+
+    fn energized_tiles(&self, dir: Direction, loc: Loc) -> usize {
+        let mut visited: HashMap<Loc, HashSet<Direction>> = HashMap::new();
+        let mut front = vec![(loc.mv(dir.opposite()), dir)];
+        while let Some((loc, dir)) = front.pop() {
+            let next_loc = loc.mv(dir);
+            if let Some(next_tile) = self.tile(next_loc) {
+                if visited.entry(next_loc).or_default().insert(dir) {
+                    for next_dir in next_tile.outgoing_rays(dir) {
+                        front.push((next_loc, next_dir));
+                    }
+                }
+            }
+        }
+        visited.len()
     }
 }
 
@@ -107,19 +142,30 @@ fn parse_input(input: &str) -> Layout {
 }
 
 fn solve_part1(layout: &Layout) -> usize {
-    let mut visited: HashMap<Loc, HashSet<Direction>> = HashMap::new();
-    let mut front = vec![(Loc(0, -1), Direction::East)];
-    while let Some((loc, dir)) = front.pop() {
-        let next_loc = loc.mv(dir);
-        if let Some(next_tile) = layout.tile(next_loc) {
-            if visited.entry(next_loc).or_default().insert(dir) {
-                for next_dir in next_tile.outgoing_rays(dir) {
-                    front.push((next_loc, next_dir));
-                }
-            }
-        }
-    }
-    visited.len()
+    layout.energized_tiles(Direction::East, Loc(0, 0))
+}
+
+fn solve_part2(layout: &Layout) -> usize {
+    let vertical = (0..layout.col_count()).flat_map(move |j| {
+        [
+            (Direction::South, 0),
+            (Direction::North, layout.row_count() - 1),
+        ]
+        .into_iter()
+        .map(move |(d, i)| (d, Loc(i as i64, j as i64)))
+    });
+    let horizontal = (0..layout.row_count()).flat_map(move |i| {
+        [
+            (Direction::East, 0),
+            (Direction::West, layout.col_count() - 1),
+        ]
+        .into_iter()
+        .map(move |(d, j)| (d, Loc(i as i64, j as i64)))
+    });
+    chain(vertical, horizontal)
+        .map(|(dir, loc)| layout.energized_tiles(dir, loc))
+        .max()
+        .unwrap()
 }
 
 fn main() {
@@ -127,4 +173,6 @@ fn main() {
     let layout = parse_input(input);
     let answer1 = solve_part1(&layout);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&layout);
+    println!("The answer to part 2 is {}", answer2);
 }
