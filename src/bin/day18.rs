@@ -6,7 +6,7 @@ use nom::{
     character::complete::{anychar, newline, one_of, space1},
     combinator::{map, map_res, recognize},
     multi::{many0, many1, separated_list1},
-    sequence::{delimited, separated_pair, terminated, tuple},
+    sequence::{delimited, pair, separated_pair, terminated},
     IResult,
 };
 
@@ -23,47 +23,21 @@ impl TryFrom<char> for Direction {
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         match value {
-            'U' => Ok(Direction::Up),
-            'L' => Ok(Direction::Left),
-            'D' => Ok(Direction::Down),
-            'R' => Ok(Direction::Right),
+            'U' | '3' => Ok(Direction::Up),
+            'L' | '2' => Ok(Direction::Left),
+            'D' | '1' => Ok(Direction::Down),
+            'R' | '0' => Ok(Direction::Right),
             _ => Err(()),
         }
     }
 }
 
-impl Direction {
-    fn offset(self) -> Loc {
-        match self {
-            Direction::Up => Loc(-1, 0),
-            Direction::Left => Loc(0, -1),
-            Direction::Down => Loc(1, 0),
-            Direction::Right => Loc(0, 1),
-        }
-    }
-}
-
-type Coord = i32;
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct Loc(Coord, Coord);
-
-impl Loc {
-    fn shift(self, dir: Direction) -> Self {
-        Self(self.0 + dir.offset().0, self.1 + dir.offset().1)
-    }
-}
+type Coord = i64;
 
 #[derive(Debug, Clone)]
 struct Move {
     dir: Direction,
-    length: u8,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Color {
-    pub red: u8,
-    pub green: u8,
-    pub blue: u8,
+    length: u32,
 }
 
 fn volume<'a>(moves: impl Iterator<Item = &'a Move>) -> Coord {
@@ -80,23 +54,16 @@ fn volume<'a>(moves: impl Iterator<Item = &'a Move>) -> Coord {
     vol.abs() + (per / 2) + 1
 }
 
-fn from_hex(input: &str) -> Result<u8, std::num::ParseIntError> {
-    u8::from_str_radix(input, 16)
+fn from_hex(input: &str) -> Result<u32, std::num::ParseIntError> {
+    u32::from_str_radix(input, 16)
 }
 
 fn is_hex_digit(c: char) -> bool {
     c.is_digit(16)
 }
 
-fn hex_primary(input: &str) -> IResult<&str, u8> {
-    map_res(take_while_m_n(2, 2, is_hex_digit), from_hex)(input)
-}
-
-fn hex_color(input: &str) -> IResult<&str, Color> {
-    let (input, _) = tag("#")(input)?;
-    let (input, (red, green, blue)) = tuple((hex_primary, hex_primary, hex_primary))(input)?;
-
-    Ok((input, Color { red, green, blue }))
+fn hex_distance(input: &str) -> IResult<&str, u32> {
+    map_res(take_while_m_n(5, 5, is_hex_digit), from_hex)(input)
 }
 
 fn integer<I: FromStr>(input: &str) -> IResult<&str, I> {
@@ -106,7 +73,7 @@ fn integer<I: FromStr>(input: &str) -> IResult<&str, I> {
     )(input)
 }
 
-fn parse_input(input: &str) -> Vec<(Move, Color)> {
+fn parse_input(input: &str) -> Vec<(Move, Move)> {
     separated_list1(
         newline,
         separated_pair(
@@ -114,20 +81,31 @@ fn parse_input(input: &str) -> Vec<(Move, Color)> {
                 separated_pair(
                     map_res(anychar, |c| Direction::try_from(c)),
                     space1,
-                    integer::<u8>,
+                    integer::<u32>,
                 ),
                 |(dir, length)| Move { dir, length },
             ),
             space1,
-            delimited(char('('), hex_color, char(')')),
+            map(
+                delimited(
+                    tag("(#"),
+                    pair(hex_distance, map_res(anychar, |c| Direction::try_from(c))),
+                    char(')'),
+                ),
+                |(length, dir)| Move { dir, length },
+            ),
         ),
     )(input)
     .unwrap()
     .1
 }
 
-fn solve_part1(data: &[(Move, Color)]) -> Coord {
+fn solve_part1(data: &[(Move, Move)]) -> Coord {
     volume(data.iter().map(|(m, _)| m))
+}
+
+fn solve_part2(data: &[(Move, Move)]) -> Coord {
+    volume(data.iter().map(|(_, m)| m))
 }
 
 fn main() {
@@ -135,6 +113,8 @@ fn main() {
     let data = parse_input(input);
     let answer1 = solve_part1(&data);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&data);
+    println!("The answer to part 2 is {}", answer2);
 }
 
 #[cfg(test)]
@@ -158,6 +138,11 @@ U 2 (#7a21e3)";
 
     #[test]
     fn test_solve_part1() {
-        assert_eq!(solve_part1(&parse_input(INPUT)), 62i32);
+        assert_eq!(solve_part1(&parse_input(INPUT)), 62);
+    }
+
+    #[test]
+    fn test_solve_part2() {
+        assert_eq!(solve_part2(&parse_input(INPUT)), 952408144115);
     }
 }
