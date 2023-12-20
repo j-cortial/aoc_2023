@@ -122,7 +122,7 @@ fn category(input: &str) -> IResult<&str, Category> {
     map_res(anychar, |c| Category::try_from(c))(input)
 }
 
-fn rating(input: &str) -> IResult<&str, (Category, Rating)> {
+fn rating_component(input: &str) -> IResult<&str, (Category, Rating)> {
     separated_pair(category, char('='), integer::<Rating>)(input)
 }
 
@@ -179,7 +179,7 @@ fn parse_input(input: &'static str) -> (Vec<(WorkflowId, Workflow)>, Vec<Part>) 
             newline,
             delimited(
                 char('{'),
-                map(separated_list1(char(','), rating), |v| Part {
+                map(separated_list1(char(','), rating_component), |v| Part {
                     ratings: [v[0].1, v[1].1, v[2].1, v[3].1],
                 }),
                 char('}'),
