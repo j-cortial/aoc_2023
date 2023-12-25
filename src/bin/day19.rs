@@ -49,10 +49,36 @@ struct Condition {
 
 impl Condition {
     fn holds_for(&self, part: &Part) -> bool {
+        let index = self.category as usize;
+        let rating = part.ratings[index];
         match self.relation {
-            Relation::Greater => part.ratings[self.category as usize] > self.threshold,
-            Relation::Less => part.ratings[self.category as usize] < self.threshold,
+            Relation::Greater => rating > self.threshold,
+            Relation::Less => rating < self.threshold,
         }
+    }
+
+    fn subsets(&self, spec: &Specification) -> (Specification, Specification) {
+        let ratings = spec.interval(self.category);
+        let (true_ratings, false_ratings) = match self.relation {
+            Relation::Greater => {
+                let mid = ratings.project(self.threshold + 1);
+                (
+                    Interval::from_bounds(mid, ratings.upper),
+                    Interval::from_bounds(ratings.lower, mid),
+                )
+            }
+            Relation::Less => {
+                let mid = ratings.project(self.threshold);
+                (
+                    Interval::from_bounds(ratings.lower, mid),
+                    Interval::from_bounds(mid, ratings.upper),
+                )
+            }
+        };
+        (
+            Specification::from_previous(spec, self.category, true_ratings),
+            Specification::from_previous(spec, self.category, false_ratings),
+        )
     }
 }
 
@@ -78,6 +104,21 @@ impl Workflow {
             .find(|(condition, _)| condition.holds_for(part))
             .map(|(_, fate)| *fate)
             .unwrap_or(self.default)
+    }
+
+    fn outcomes(&self, init_spec: &Specification) -> Vec<(Fate, Specification)> {
+        let mut state = init_spec.clone();
+        let mut res: Vec<_> = self
+            .logic
+            .iter()
+            .scan(&mut state, |spec, (condition, fate)| {
+                let (true_spec, false_spec) = condition.subsets(spec);
+                **spec = false_spec;
+                Some((*fate, true_spec))
+            })
+            .collect();
+        res.push((self.default, state));
+        res
     }
 }
 
@@ -108,6 +149,80 @@ impl Oracle {
             };
             *workflow_id = next_id;
         }
+    }
+
+    fn valid_specifications(&self) -> Vec<Specification> {
+        let mut res = vec![];
+        let mut front = vec![("in", Specification::new())];
+        while let Some((workflow_id, spec)) = front.pop() {
+            for (fate, spec) in self
+                .workflows
+                .get(workflow_id)
+                .map(|w| w.outcomes(&spec))
+                .unwrap()
+            {
+                match fate {
+                    Fate::Accept => res.push(spec),
+                    Fate::Reject => {}
+                    Fate::Forward(next) => front.push((next, spec)),
+                }
+            }
+        }
+        res
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Interval {
+    lower: Rating,
+    upper: Rating,
+}
+
+impl Interval {
+    fn new() -> Self {
+        Self {
+            lower: 1,
+            upper: 4000 + 1,
+        }
+    }
+
+    fn from_bounds(lower: Rating, upper: Rating) -> Self {
+        Self { lower, upper }
+    }
+
+    fn len(&self) -> usize {
+        (self.upper - self.lower) as usize
+    }
+
+    fn project(&self, rating: Rating) -> Rating {
+        rating.max(self.lower).min(self.upper)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Specification {
+    ratings: [Interval; 4],
+}
+
+impl Specification {
+    fn new() -> Self {
+        Self {
+            ratings: [Interval::new(); Category::COUNT],
+        }
+    }
+
+    fn from_previous(previous: &Self, category: Category, interval: Interval) -> Self {
+        let mut res = previous.clone();
+        res.ratings[category as usize] = interval;
+        res
+    }
+
+    fn len(&self) -> usize {
+        self.ratings.iter().map(|i| i.len()).product()
+    }
+
+    fn interval(&self, category: Category) -> Interval {
+        self.ratings[category as usize]
     }
 }
 
@@ -199,16 +314,27 @@ fn solve_part1(workflows: &[(WorkflowId, Workflow)], parts: &[Part]) -> u64 {
         .sum()
 }
 
+fn solve_part2(workflows: &[(WorkflowId, Workflow)]) -> u64 {
+    let oracle = Oracle::new(workflows.iter());
+    oracle
+        .valid_specifications()
+        .into_iter()
+        .map(|spec| spec.len() as u64)
+        .sum()
+}
+
 fn main() {
     let input = include_str!("../../data/day19.txt");
     let (workflows, parts) = parse_input(input);
     let answer1 = solve_part1(&workflows, &parts);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&workflows);
+    println!("The answer to part 2 is {}", answer2);
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{parse_input, solve_part1};
+    use crate::{parse_input, solve_part1, solve_part2};
 
     const INPUT: &str = "px{a<2006:qkq,m>2090:A,rfg}
 pv{a>1716:R,A}
@@ -231,7 +357,14 @@ hdj{m>838:A,pv}
     #[test]
     fn test_solve_part1() {
         let (workflows, parts) = parse_input(INPUT);
-        let answer1 = solve_part1(&workflows, &parts);
-        assert_eq!(answer1, 19114);
+        let answer = solve_part1(&workflows, &parts);
+        assert_eq!(answer, 19114);
+    }
+
+    #[test]
+    fn test_solve_part2() {
+        let (workflows, _) = parse_input(INPUT);
+        let answer = solve_part2(&workflows);
+        assert_eq!(answer, 167409079868000);
     }
 }
