@@ -1,4 +1,6 @@
-use std::{collections::HashSet, convert::identity, mem::swap};
+use std::{collections::HashSet, mem::swap};
+
+use itertools::Itertools;
 
 type Coord = i16;
 type Loc = [Coord; 2];
@@ -11,6 +13,8 @@ fn add(base: Loc, delta: Loc) -> Loc {
 
 #[derive(Debug)]
 struct Garden {
+    rows: usize,
+    cols: usize,
     open_plots: HashSet<Loc>,
 }
 
@@ -34,26 +38,37 @@ impl Garden {
 }
 
 fn parse_input(input: &str) -> (Garden, Loc) {
-    let (plots, start): (Vec<_>, Vec<_>) = input
+    let (locs, is_open, is_start): (Vec<_>, Vec<_>, Vec<_>) = input
         .lines()
         .enumerate()
         .flat_map(|(row, line)| {
             line.chars().enumerate().map(move |(col, tile)| {
                 let loc = [row as Coord, col as Coord];
                 match tile {
-                    '.' => (Some(loc), None),
-                    '#' => (None, None),
-                    'S' => (Some(loc), Some(loc)),
+                    '.' => (loc, true, false),
+                    '#' => (loc, false, false),
+                    'S' => (loc, true, true),
                     _ => panic!(),
                 }
             })
         })
-        .unzip();
+        .multiunzip();
     (
         Garden {
-            open_plots: plots.into_iter().filter_map(identity).collect(),
+            rows: input.lines().count(),
+            cols: input.lines().next().unwrap().len(),
+            open_plots: is_open
+                .into_iter()
+                .zip(locs.iter())
+                .filter_map(|(b, l)| b.then_some(*l))
+                .collect(),
         },
-        start.into_iter().filter_map(identity).next().unwrap(),
+        is_start
+            .into_iter()
+            .zip(locs.iter())
+            .filter_map(|(b, l)| b.then_some(*l))
+            .next()
+            .unwrap(),
     )
 }
 
