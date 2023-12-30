@@ -1,17 +1,8 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Binary,
-};
+use std::collections::{HashMap, HashSet};
 
 type Coord = i16;
 type Loc2 = [Coord; 2];
 type Loc3 = [Coord; 3];
-
-fn in_range(value: Coord, bounds: (Coord, Coord)) -> bool {
-    let lower = bounds.0.min(bounds.1);
-    let upper = bounds.0.max(bounds.1);
-    value >= lower && value <= upper
-}
 
 fn projection(loc: &Loc3) -> Loc2 {
     [loc[0], loc[1]]
@@ -157,6 +148,18 @@ impl<'a> Stack<'a> {
         }
         res
     }
+
+    fn dependencies(&self) -> Vec<HashSet<usize>> {
+        let mut res: Vec<_> = vec![HashSet::default(); self.bricks.len()];
+        for col in self.extents.values() {
+            for pair in col.windows(2) {
+                if pair[0].1 .1 == pair[1].1 .0 - 1 {
+                    res[pair[0].0].insert(pair[1].0);
+                }
+            }
+        }
+        res
+    }
 }
 
 fn solve_part1(bricks: &[Brick]) -> usize {
@@ -175,11 +178,53 @@ fn solve_part1(bricks: &[Brick]) -> usize {
     bricks.len() - key_bricks.len()
 }
 
+fn solve_part2(bricks: &[Brick]) -> usize {
+    let mut stack = Stack::new(bricks);
+    stack.settle();
+    let supports = stack.supports();
+    let key_bricks: HashSet<_> = supports
+        .iter()
+        .filter_map(|supports| {
+            if supports.len() == 1 {
+                return supports.into_iter().next();
+            }
+            None
+        })
+        .collect();
+    let dependencies = stack.dependencies();
+    key_bricks
+        .into_iter()
+        .map(|&root| {
+            let mut removed = HashSet::from([root]);
+            let mut front = removed.clone();
+            loop {
+                let falling: Vec<_> = front
+                    .drain()
+                    .flat_map(|falling_id| {
+                        dependencies[falling_id]
+                            .iter()
+                            .copied()
+                            .filter(|&candidate_id| supports[candidate_id].is_subset(&removed))
+                    })
+                    .collect();
+                if falling.is_empty() {
+                    break;
+                }
+                front.extend(falling.into_iter());
+                removed.extend(front.iter())
+            }
+            removed.len() - 1
+        })
+        .sum()
+}
+
 fn main() {
     let input = include_str!("../../data/day22.txt");
     let bricks = parse_input(input);
     let answer1 = solve_part1(&bricks);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&bricks);
+    println!("The answer to part 2 is {}", answer2);
 }
 
 #[cfg(test)]
@@ -198,5 +243,10 @@ mod test {
     fn test_solve_part1() {
         let answer = solve_part1(&parse_input(INPUT));
         assert_eq!(answer, 5);
+    }
+    #[test]
+    fn test_solve_part2() {
+        let answer = solve_part2(&parse_input(INPUT));
+        assert_eq!(answer, 7);
     }
 }
