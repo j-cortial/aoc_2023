@@ -72,6 +72,18 @@ impl Terrain {
             .filter(|(_, next_loc)| self.tiles.contains_key(next_loc))
     }
 
+    fn valid_icy_moves_from<'a>(&'a self, loc: &'a Loc) -> impl Iterator<Item = (Dir, Loc)> + 'a {
+        Dir::iter()
+            .map(|dir| (dir, dir.offset(loc)))
+            .filter(|(dir, next_loc)| match self.tiles.get(next_loc) {
+                Some(tile) => match tile {
+                    Tile::Flat => true,
+                    Tile::Slope(slope) => dir == slope,
+                },
+                None => false,
+            })
+    }
+
     fn dry_nodes(&self) -> HashMap<Loc, Vec<Dir>> {
         self.tiles
             .keys()
@@ -84,6 +96,25 @@ impl Terrain {
                 )
             })
             .filter(|(_, v)| v.len() != 2)
+            .collect()
+    }
+
+    fn icy_nodes(&self) -> HashMap<Loc, Vec<Dir>> {
+        self.tiles
+            .keys()
+            .map(|loc| {
+                (
+                    *loc,
+                    self.valid_dry_moves_from(loc)
+                        .map(|(d, _)| d)
+                        .collect::<Vec<_>>(),
+                    self.valid_icy_moves_from(loc)
+                        .map(|(d, _)| d)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .filter(|(_, v, _)| v.len() != 2)
+            .map(|(l, d, _)| (l, d))
             .collect()
     }
 
@@ -106,6 +137,40 @@ impl Terrain {
                 res.entry(*node_loc)
                     .or_default()
                     .push((*dir, curr_loc, weight));
+            }
+        }
+        res
+    }
+
+    fn icy_edges(&self) -> HashMap<Loc, Vec<(Dir, Loc, u64)>> {
+        let nodes = self.icy_nodes();
+        let mut res = HashMap::<Loc, Vec<_>>::new();
+        for (node_loc, node_dirs) in nodes.iter() {
+            for dir in node_dirs {
+                let mut weight = 1;
+                let mut prev_dir = *dir;
+                let mut curr_loc = prev_dir.offset(node_loc);
+                let ok = loop {
+                    if nodes.contains_key(&curr_loc) {
+                        break true;
+                    }
+                    if let Some((curr_dir, next_loc)) = self
+                        .valid_icy_moves_from(&curr_loc.clone())
+                        .filter(|(d, _)| *d != prev_dir.opposite())
+                        .next()
+                    {
+                        prev_dir = curr_dir;
+                        curr_loc = next_loc;
+                        weight += 1;
+                    } else {
+                        break false;
+                    }
+                };
+                if ok {
+                    res.entry(*node_loc)
+                        .or_default()
+                        .push((*dir, curr_loc, weight));
+                }
             }
         }
         res
@@ -134,104 +199,6 @@ fn parse_input(input: &str) -> Terrain {
     )
 }
 
-#[derive(Debug)]
-struct Fork {
-    loc: Loc,
-    visited: HashSet<Loc>,
-    candidates: Vec<Dir>,
-}
-
-impl Fork {
-    fn from_entry(entry: Loc) -> Self {
-        Self {
-            loc: entry,
-            visited: HashSet::from([entry]),
-            candidates: vec![Dir::South],
-        }
-    }
-
-    fn pop(&mut self) -> Option<Dir> {
-        self.candidates.pop()
-    }
-}
-
-fn solve(terrain: &Terrain, dry: bool) -> u64 {
-    let mut res = 0;
-    let mut forks = vec![Fork::from_entry(terrain.entry())];
-    while let Some(mut fork) = forks.pop() {
-        if let Some(mut dir) = fork.pop() {
-            let mut base_loc = fork.loc;
-            let mut visited = HashSet::new();
-            loop {
-                let loc = dir.offset(&base_loc);
-                visited.insert(loc);
-                if loc == terrain.exit() {
-                    let path_length = visited.len()
-                        + fork.visited.len()
-                        + forks.iter().map(|f| f.visited.len()).sum::<usize>()
-                        - 1;
-                    res = res.max(path_length as u64);
-                    forks.push(fork);
-                    break;
-                }
-                let candidates: Vec<_> = Dir::iter()
-                    .filter(|&d| d != dir.opposite())
-                    .filter(|d| {
-                        let next_loc = d.offset(&loc);
-                        !visited.contains(&next_loc)
-                            && !fork.visited.contains(&next_loc)
-                            && forks.iter().all(|f| !f.visited.contains(&next_loc))
-                            && match terrain.tiles.get(&next_loc) {
-                                Some(tile) => match *tile {
-                                    Tile::Flat => true,
-                                    Tile::Slope(slope) => dry || slope != d.opposite(),
-                                },
-                                None => false,
-                            }
-                    })
-                    .collect();
-                match candidates.len() {
-                    0 => {
-                        if dry {
-                            if let Some(index) = fork
-                                .candidates
-                                .iter()
-                                .position(|d| loc == d.offset(&fork.loc))
-                            {
-                                println!(
-                                    "Removing candidate {:?} at fork {:?}",
-                                    &fork.candidates[index], &fork
-                                );
-                                fork.candidates.remove(index);
-                            }
-                        }
-                        forks.push(fork);
-                        break;
-                    }
-                    1 => {
-                        dir = candidates[0];
-                        base_loc = loc;
-                    }
-                    _ => {
-                        forks.push(fork);
-                        forks.push(Fork {
-                            loc,
-                            visited,
-                            candidates,
-                        });
-                        break;
-                    }
-                };
-            }
-        }
-    }
-    res
-}
-
-fn solve_part1(terrain: &Terrain) -> u64 {
-    solve(terrain, false)
-}
-
 fn solve_impl(
     edges: &HashMap<Loc, Vec<(Dir, Loc, u64)>>,
     goal: Loc,
@@ -257,6 +224,19 @@ fn solve_impl(
             }
         }
     }
+}
+
+fn solve_part1(terrain: &Terrain) -> u64 {
+    let mut res = 0;
+    solve_impl(
+        &terrain.icy_edges(),
+        terrain.exit(),
+        Default::default(),
+        terrain.entry(),
+        0,
+        &mut res,
+    );
+    res
 }
 
 fn solve_part2(terrain: &Terrain) -> u64 {
