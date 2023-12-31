@@ -110,7 +110,7 @@ impl Fork {
     }
 }
 
-fn solve_part1(terrain: &Terrain) -> u64 {
+fn solve(terrain: &Terrain, dry: bool) -> u64 {
     let mut res = 0;
     let mut forks = vec![Fork::from_entry(terrain.entry())];
     while let Some(mut fork) = forks.pop() {
@@ -139,7 +139,7 @@ fn solve_part1(terrain: &Terrain) -> u64 {
                             && match terrain.tiles.get(&next_loc) {
                                 Some(tile) => match *tile {
                                     Tile::Flat => true,
-                                    Tile::Slope(slope) => slope != d.opposite(),
+                                    Tile::Slope(slope) => dry || slope != d.opposite(),
                                 },
                                 None => false,
                             }
@@ -147,6 +147,19 @@ fn solve_part1(terrain: &Terrain) -> u64 {
                     .collect();
                 match candidates.len() {
                     0 => {
+                        if dry {
+                            if let Some(index) = fork
+                                .candidates
+                                .iter()
+                                .position(|d| loc == d.offset(&fork.loc))
+                            {
+                                println!(
+                                    "Removing candidate {:?} at fork {:?}",
+                                    &fork.candidates[index], &fork
+                                );
+                                fork.candidates.remove(index);
+                            }
+                        }
                         forks.push(fork);
                         break;
                     }
@@ -170,11 +183,21 @@ fn solve_part1(terrain: &Terrain) -> u64 {
     res
 }
 
+fn solve_part1(terrain: &Terrain) -> u64 {
+    solve(terrain, false)
+}
+
+fn solve_part2(terrain: &Terrain) -> u64 {
+    solve(terrain, true)
+}
+
 fn main() {
     let input = include_str!("../../data/day23.txt");
     let terrain = parse_input(input);
     let answer1 = solve_part1(&terrain);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&terrain);
+    println!("The answer to part 2 is {}", answer2);
 }
 
 #[cfg(test)]
@@ -203,9 +226,16 @@ mod test {
 #.###.###.#.###.#.#v###
 #.....###...###...#...#
 #####################.#";
+
     #[test]
     fn test_solve_part1() {
         let terrain = parse_input(INPUT);
         assert_eq!(solve_part1(&terrain), 94);
+    }
+
+    #[test]
+    fn test_solve_part2() {
+        let terrain = parse_input(INPUT);
+        assert_eq!(solve_part2(&terrain), 154);
     }
 }
