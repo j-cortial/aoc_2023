@@ -150,9 +150,12 @@ impl Terrain {
                 let mut weight = 1;
                 let mut prev_dir = *dir;
                 let mut curr_loc = prev_dir.offset(node_loc);
-                let ok = loop {
+                loop {
                     if nodes.contains_key(&curr_loc) {
-                        break true;
+                        res.entry(*node_loc)
+                            .or_default()
+                            .push((*dir, curr_loc, weight));
+                        break;
                     }
                     if let Some((curr_dir, next_loc)) = self
                         .valid_icy_moves_from(&curr_loc.clone())
@@ -163,13 +166,8 @@ impl Terrain {
                         curr_loc = next_loc;
                         weight += 1;
                     } else {
-                        break false;
+                        break;
                     }
-                };
-                if ok {
-                    res.entry(*node_loc)
-                        .or_default()
-                        .push((*dir, curr_loc, weight));
                 }
             }
         }
