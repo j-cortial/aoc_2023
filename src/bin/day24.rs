@@ -86,8 +86,8 @@ fn future_intersection(a: &Hailstone<2>, b: &Hailstone<2>) -> Option<[f64; 2]> {
     ])
 }
 
-fn in_range(coord: f64, lower: Coord, upper: Coord) -> bool {
-    lower as f64 <= coord && coord <= upper as f64
+fn in_range<const LOWER_BOUND: Coord, const UPPER_BOUND: Coord>(coord: f64) -> bool {
+    LOWER_BOUND as f64 <= coord && coord <= UPPER_BOUND as f64
 }
 
 fn parse_loc3(input: &str) -> Loc<3> {
@@ -122,8 +122,8 @@ fn solve_part1<const LOWER_BOUND: Coord, const UPPER_BOUND: Coord>(
         .combinations(2)
         .filter_map(|pair| {
             future_intersection(pair[0], pair[1]).filter(|loc| {
-                in_range(loc[0], LOWER_BOUND, UPPER_BOUND)
-                    && in_range(loc[1], LOWER_BOUND, UPPER_BOUND)
+                in_range::<LOWER_BOUND, UPPER_BOUND>(loc[0])
+                    && in_range::<LOWER_BOUND, UPPER_BOUND>(loc[1])
             })
         })
         .count()
