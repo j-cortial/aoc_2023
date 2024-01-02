@@ -92,11 +92,8 @@ fn in_range<const LOWER_BOUND: Coord, const UPPER_BOUND: Coord>(coord: f64) -> b
 
 fn parse_loc3(input: &str) -> Loc<3> {
     let mut iter = input.split(", ");
-    Loc::new([
-        iter.next().map(|s| s.trim().parse()).unwrap().unwrap(),
-        iter.next().map(|s| s.trim().parse()).unwrap().unwrap(),
-        iter.next().map(|s| s.trim().parse()).unwrap().unwrap(),
-    ])
+    let mut parse = || iter.next().map(|s| s.trim().parse().unwrap()).unwrap();
+    Loc::new([parse(), parse(), parse()])
 }
 
 fn parse_input(input: &str) -> Vec<Hailstone<3>> {
