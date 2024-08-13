@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use nalgebra::{Const, OMatrix, Vector3};
+use nalgebra::{Const, Matrix3, OMatrix, RowVector3, Vector3};
 
 type Coord = i64;
 
@@ -89,11 +89,119 @@ fn solve_part1<const LOWER_BOUND: Coord, const UPPER_BOUND: Coord>(
         .count()
 }
 
+type Data = OMatrix<f64, Const<3>, Const<3>>;
+type Residual = OMatrix<f64, Const<9>, Const<1>>;
+type Gradient = OMatrix<f64, Const<9>, Const<6>>;
+
+struct Problem {
+    positions: Data,
+    velocities: Data,
+}
+
+impl Problem {
+    fn new(hailstones: &[Hailstone<3>]) -> Self {
+        let positions = Data::from_fn(|i, j| hailstones[j].position[i] as f64);
+        let velocities = Data::from_fn(|i, j| hailstones[j].velocity[i] as f64);
+        Self {
+            positions,
+            velocities,
+        }
+    }
+
+    fn relax(value: &Vector3<Coord>) -> Vector3<f64> {
+        Vector3::from_fn(|i, _| value[i] as f64)
+    }
+
+    fn round(value: &Vector3<f64>) -> Vector3<Coord> {
+        Vector3::from_fn(|i, _| value[i].round() as Coord)
+    }
+
+    fn residual(&self, pos: &Vector3<f64>, vel: &Vector3<f64>) -> Residual {
+        let mut columns = self
+            .positions
+            .column_iter()
+            .zip(self.velocities.column_iter())
+            .map(|(p, v)| (pos - p).cross(&(vel - v)));
+        let columns = [
+            columns.next().unwrap(),
+            columns.next().unwrap(),
+            columns.next().unwrap(),
+        ];
+        Matrix3::from_columns(&columns).reshape_generic(Const::<9>, Const::<1>)
+    }
+
+    fn partial_gradient(state: &Vector3<f64>, data: &Data) -> OMatrix<f64, Const<9>, Const<3>> {
+        let delta = RowVector3::repeat(1.0).kronecker(&Matrix3::identity());
+        let diff =
+            (data - RowVector3::repeat(1.0).kronecker(state)).kronecker(&RowVector3::repeat(1.0));
+        OMatrix::<f64, Const<9>, Const<3>>::from_row_iterator(
+            delta
+                .column_iter()
+                .zip(diff.column_iter())
+                .flat_map(|(d, p)| {
+                    p.cross(&d)
+                        .into_iter()
+                        .copied()
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                }),
+        )
+    }
+
+    fn gradient(&self, pos: &Vector3<f64>, vel: &Vector3<f64>) -> Gradient {
+        let pos_gradient = Self::partial_gradient(&vel, &self.velocities).scale(-1.0);
+        let vel_gradient = Self::partial_gradient(&pos, &self.positions);
+        Gradient::from_iterator(
+            pos_gradient
+                .into_iter()
+                .chain(vel_gradient.into_iter())
+                .copied(),
+        )
+    }
+
+    fn solve(
+        &self,
+        init_pos: &Vector3<Coord>,
+        init_vel: &Vector3<Coord>,
+    ) -> (Vector3<Coord>, Vector3<Coord>) {
+        let mut pos = Self::relax(init_pos);
+        let mut vel = Self::relax(init_vel);
+        let mut res = self.residual(&pos, &vel);
+        let mut iter = 1;
+        while res.norm() > 0.0 {
+            let gradient = self.gradient(&pos, &vel);
+            let qr = gradient.qr();
+            qr.q_tr_mul(&mut res);
+            let r = qr.unpack_r();
+            let increment = r
+                .fixed_rows::<6>(0)
+                .solve_upper_triangular(&res.fixed_rows::<6>(0))
+                .unwrap();
+            pos -= increment.fixed_rows::<3>(0);
+            vel -= increment.fixed_rows::<3>(3);
+            iter += 1;
+            if iter > 100 {
+                break;
+            }
+            res = self.residual(&pos, &vel);
+        }
+        (Self::round(&pos), Self::round(&vel))
+    }
+}
+
+fn solve_part2(hailstones: &[Hailstone<3>]) -> Coord {
+    let problem = Problem::new(hailstones);
+    let (pos, _) = problem.solve(&Vector3::zeros(), &Vector3::zeros());
+    pos[0] + pos[1] + pos[2]
+}
+
 fn main() {
     let input = include_str!("../../data/day24.txt");
     let hailstones = parse_input(input);
     let answer1 = solve_part1::<200_000_000_000_000, 400_000_000_000_000>(&hailstones);
     println!("The answer to part 1 is {answer1}");
+    let answer2 = solve_part2(&hailstones);
+    println!("The answer to part 2 is {answer2}");
 }
 
 #[cfg(test)]
@@ -109,5 +217,25 @@ mod test {
     #[test]
     fn test_solve_part1() {
         assert_eq!(solve_part1::<7, 27>(&parse_input(INPUT)), 2);
+    }
+
+    #[test]
+    fn test_problem_residual() {
+        let problem = Problem::new(&parse_input(INPUT));
+        assert_eq!(
+            problem.residual(
+                &Problem::relax(&Vector3::new(24, 13, 10)),
+                &Problem::relax(&Vector3::new(-3, 1, 2))
+            ),
+            Residual::zeros()
+        );
+    }
+
+    #[test]
+    fn test_problem_solve() {
+        let problem = Problem::new(&parse_input(INPUT));
+        let (pos, vel) = problem.solve(&Vector3::zeros(), &Vector3::zeros());
+        assert_eq!(pos, Vector3::new(24, 13, 10));
+        assert_eq!(vel, Vector3::new(-3, 1, 2));
     }
 }
