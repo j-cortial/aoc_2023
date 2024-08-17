@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use nom::{
     character::complete::{anychar, char, newline, one_of, space1},
@@ -9,7 +9,7 @@ use nom::{
 };
 use strum::EnumIs;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIs, Hash)]
 enum Condition {
     Operational,
     Damaged,
@@ -32,7 +32,7 @@ impl TryFrom<char> for Condition {
 #[derive(Debug)]
 struct Record {
     conditions: Vec<Condition>,
-    checksum: Vec<usize>,
+    checksum: Vec<u8>,
 }
 
 fn integer<I: FromStr>(input: &str) -> IResult<&str, I> {
@@ -42,18 +42,31 @@ fn integer<I: FromStr>(input: &str) -> IResult<&str, I> {
     )(input)
 }
 
+#[derive(Debug, Default)]
+struct Memoization(HashMap<(Vec<Condition>, Vec<u8>), usize>);
+
+impl Memoization {
+    fn get(&self, key: &(Vec<Condition>, Vec<u8>)) -> Option<usize> {
+        self.0.get(key).copied()
+    }
+
+    fn set(&mut self, key: (Vec<Condition>, Vec<u8>), value: usize) {
+        self.0.insert(key, value);
+    }
+}
+
 #[derive(Debug)]
 struct Status {
     conditions: Vec<Condition>,
-    checksum: Vec<usize>,
+    checksum: Vec<u8>,
     damaged_count: usize,
     upper_bound: usize,
     lower_bound: usize,
 }
 
 impl Record {
-    fn valid_combinations(&self) -> usize {
-        let damaged_count = self.checksum.iter().sum::<usize>();
+    fn valid_combinations(&self, memo: &mut Memoization) -> usize {
+        let damaged_count = self.checksum.iter().fold(0, |acc, x| acc + *x as usize);
         let upper_bound = self
             .conditions
             .iter()
@@ -67,22 +80,38 @@ impl Record {
             upper_bound,
             lower_bound,
         };
-        status.valid_combinations()
+        status.valid_combinations(memo)
+    }
+
+    fn unfold(self) -> Self {
+        Self {
+            conditions: vec![&self.conditions[..]; 5].join(&Condition::Unknown),
+            checksum: self.checksum.repeat(5),
+            ..self
+        }
     }
 }
 
 impl Status {
-    fn valid_combinations(mut self) -> usize {
+    fn valid_combinations(mut self, memo: &mut Memoization) -> usize {
+        let key = (self.conditions, self.checksum);
+        if let Some(res) = memo.get(&key) {
+            return res;
+        }
+        self.conditions = key.0.clone();
+        self.checksum = key.1.clone();
         if self.damaged_count < self.lower_bound || self.damaged_count > self.upper_bound {
+            memo.set(key, 0);
             return 0;
         }
         if self.damaged_count == 0 {
+            memo.set(key, 1);
             return 1;
         }
         let tail = self.conditions.last().unwrap();
         match tail {
             Condition::Damaged => {
-                let checksum_tail = *self.checksum.last().unwrap();
+                let checksum_tail = *self.checksum.last().unwrap() as usize;
                 let (damaged_count, unknown_count) =
                     self.conditions.iter().rev().take(checksum_tail).fold(
                         (0, 0),
@@ -93,9 +122,11 @@ impl Status {
                         },
                     );
                 if damaged_count + unknown_count != checksum_tail {
+                    memo.set(key, 0);
                     return 0;
                 }
                 if checksum_tail == self.conditions.len() {
+                    memo.set(key, 1);
                     return 1;
                 }
                 let additional_unknown = match self
@@ -112,37 +143,42 @@ impl Status {
                 self.checksum.pop();
                 self.conditions
                     .truncate(self.conditions.len() - (checksum_tail + 1));
-                Self {
+                let res = Self {
                     damaged_count: self.damaged_count - checksum_tail,
                     upper_bound: self.upper_bound - (checksum_tail + additional_unknown),
                     lower_bound: self.lower_bound - damaged_count,
                     ..self
                 }
-                .valid_combinations()
+                .valid_combinations(memo);
+                memo.set(key, res);
+                res
             }
             Condition::Operational => {
                 self.conditions.pop();
-                Self { ..self }
+                let res = Self { ..self }.valid_combinations(memo);
+                memo.set(key, res);
+                res
             }
-            .valid_combinations(),
             Condition::Unknown => {
                 let mut conditions_damaged = self.conditions.clone();
                 *conditions_damaged.last_mut().unwrap() = Condition::Damaged;
                 let mut conditions_operational = self.conditions;
                 conditions_operational.pop();
-                Self {
+                let res = Self {
                     conditions: conditions_damaged,
                     lower_bound: self.lower_bound + 1,
                     checksum: self.checksum.clone(),
                     ..self
                 }
-                .valid_combinations()
+                .valid_combinations(memo)
                     + Self {
                         conditions: conditions_operational,
                         upper_bound: self.upper_bound - 1,
                         ..self
                     }
-                    .valid_combinations()
+                    .valid_combinations(memo);
+                memo.set(key, res);
+                res
             }
         }
     }
@@ -167,15 +203,19 @@ fn parse_input(input: &str) -> Vec<Record> {
     .1
 }
 
-fn solve_part1(records: &[Record]) -> usize {
-    records.iter().map(|r| r.valid_combinations()).sum()
+fn solve(records: &[Record], memo: &mut Memoization) -> usize {
+    records.iter().map(|r| r.valid_combinations(memo)).sum()
 }
 
 fn main() {
     let input = include_str!("../../data/day12.txt");
     let records = parse_input(input);
-    let answer1 = solve_part1(&records);
+    let mut memo = Memoization::default();
+    let answer1 = solve(&records, &mut memo);
     println!("The answer to part 1 is {}", answer1);
+    let records: Vec<_> = records.into_iter().map(|r| r.unfold()).collect();
+    let answer2 = solve(&records, &mut memo);
+    println!("The answer to part 2 is {}", answer2);
 }
 
 #[cfg(test)]
@@ -198,8 +238,25 @@ mod test {
                 ],
                 checksum: vec![1, 1, 3],
             }
-            .valid_combinations(),
+            .valid_combinations(&mut Memoization::default()),
             1
+        );
+    }
+
+    #[test]
+    fn test_valid_combinations_unfolded() {
+        use Condition::*;
+        assert_eq!(
+            Record {
+                conditions: vec![
+                    Unknown, Damaged, Damaged, Damaged, Unknown, Unknown, Unknown, Unknown,
+                    Unknown, Unknown, Unknown, Unknown,
+                ],
+                checksum: vec![3, 2, 1],
+            }
+            .unfold()
+            .valid_combinations(&mut Memoization::default()),
+            506250
         );
     }
 }
