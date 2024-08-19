@@ -1,5 +1,6 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
+use gcd::Gcd;
 use nom::{
     bytes::complete::tag,
     character::complete::{alpha1, newline, one_of},
@@ -11,14 +12,14 @@ use strum::{EnumCount, EnumIs};
 
 type ModuleId = &'static str;
 
-#[derive(Debug, Clone, Copy, EnumIs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIs)]
 enum ModuleKind {
     Broadcast,
     FlipFlop,
     Conjunction,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Module {
     kind: ModuleKind,
     destinations: Vec<ModuleId>,
@@ -29,14 +30,24 @@ struct Network {
     modules: HashMap<ModuleId, Module>,
 }
 
-#[derive(Debug, Clone, Copy, Default, EnumCount, EnumIs)]
+impl Network {
+    fn sources(&self, module_id: ModuleId) -> Vec<ModuleId> {
+        self.modules
+            .iter()
+            .filter(|&(_id, module)| module.destinations.contains(&module_id))
+            .map(|(id, _module)| *id)
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumCount, EnumIs)]
 enum Energy {
     #[default]
     Low,
     High,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum FlipFlopState {
     #[default]
     Off,
@@ -56,10 +67,11 @@ impl FlipFlopState {
 struct NetworkState {
     flipflop_states: HashMap<ModuleId, FlipFlopState>,
     conjunction_states: HashMap<ModuleId, HashMap<ModuleId, Energy>>,
+    probe: Option<ModuleId>,
 }
 
 impl NetworkState {
-    fn new(network: &Network) -> Self {
+    fn new(network: &Network, probe: Option<ModuleId>) -> Self {
         let flipflop_states = network
             .modules
             .iter()
@@ -89,6 +101,7 @@ impl NetworkState {
         Self {
             flipflop_states,
             conjunction_states,
+            probe,
         }
     }
 }
@@ -98,14 +111,16 @@ struct NetworkActivity<'a> {
     network: &'a Network,
     state: NetworkState,
     counts: [usize; Energy::COUNT],
+    probe_signal: Vec<(ModuleId, Energy)>,
 }
 
 impl<'a> NetworkActivity<'a> {
-    fn new(network: &'a Network) -> Self {
+    fn new(network: &'a Network, probe: Option<ModuleId>) -> Self {
         Self {
             network,
-            state: NetworkState::new(network),
+            state: NetworkState::new(network, probe),
             counts: Default::default(),
+            probe_signal: Default::default(),
         }
     }
 
@@ -118,10 +133,14 @@ impl<'a> NetworkActivity<'a> {
     }
 
     fn press_button(&mut self) {
+        self.probe_signal.clear();
         let mut pulses: VecDeque<(ModuleId, ModuleId, Energy)> = VecDeque::new();
         pulses.push_back(("button", "broadcaster", Energy::Low));
         while let Some((source_id, target_id, energy)) = pulses.pop_front() {
             self.increment_count(energy);
+            if self.state.probe == Some(target_id) {
+                self.probe_signal.push((source_id, energy));
+            }
             if let Some(target_module) = self.network.modules.get(target_id) {
                 match target_module.kind {
                     ModuleKind::Broadcast => {
@@ -191,11 +210,52 @@ fn parse_input(input: &'static str) -> Network {
 }
 
 fn solve_part1(network: &Network) -> usize {
-    let mut activity = NetworkActivity::new(network);
+    let mut activity = NetworkActivity::new(network, None);
     for _ in 0..1000 {
         activity.press_button();
     }
     activity.pulse_count(Energy::Low) * activity.pulse_count(Energy::High)
+}
+
+fn solve_part2(network: &Network) -> usize {
+    let rx_sources = network.sources("rx");
+    assert_eq!(rx_sources.len(), 1);
+    let rx_source = rx_sources[0];
+    assert_eq!(
+        network.modules.get(rx_source).map(|t| t.kind),
+        Some(ModuleKind::Conjunction)
+    );
+    let mut activity = NetworkActivity::new(network, Some(rx_source));
+    let generators: HashSet<_> = activity.state.conjunction_states.get(rx_source).map(|s| s.keys().copied().collect()).unwrap();
+    let mut history: HashMap<_, Vec<_>> = HashMap::new();
+    for i in 0.. {
+        activity.press_button();
+        let high_pulses: Vec<_> = activity
+            .probe_signal
+            .iter()
+            .filter(|(_, e)| e.is_high())
+            .map(|(id, _)| id)
+            .collect();
+        let change = !high_pulses.is_empty();
+        for &p in high_pulses {
+            match history.entry(p) {
+                std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(i),
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(vec![i]);
+                }
+            };
+        }
+        if change {
+            if history.len() == generators.len() && history.values().all(|v| v.len() >= 2) {
+                return history.values().map(|v| v[v.len() - 1] - v[v.len() - 2]).reduce(lcm).unwrap();
+            }
+        }
+    }
+    0
+}
+
+fn lcm(first: usize, second: usize) -> usize {
+    first * second / first.gcd(second)
 }
 
 fn main() {
@@ -203,6 +263,8 @@ fn main() {
     let network = parse_input(input);
     let answer1 = solve_part1(&network);
     println!("The answer to part 1 is {}", answer1);
+    let answer2 = solve_part2(&network);
+    println!("The answer to part 2 is {}", answer2);
 }
 
 #[cfg(test)]
